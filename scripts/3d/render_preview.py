@@ -1,6 +1,6 @@
 import sys, bpy
-f   = sys.argv[1] if len(sys.argv) > 1 else "小鹰3D模型/小鹰_3D.blend"
-out = sys.argv[2] if len(sys.argv) > 2 else "小鹰3D模型/preview.png"
+f   = sys.argv[1] if len(sys.argv) > 1 else "小鹰3D模型/展翅写实版_小鹰/小鹰_3D.blend"
+out = sys.argv[2] if len(sys.argv) > 2 else "小鹰3D模型/展翅写实版_小鹰/preview.png"
 bpy.ops.wm.open_mainfile(filepath=f)
 scn = bpy.context.scene
 scn.render.engine = 'CYCLES'

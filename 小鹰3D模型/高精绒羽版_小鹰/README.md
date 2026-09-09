@@ -10,7 +10,7 @@
 | --- | --- |
 | `小鹰.blend` | Blender 4.2 工程（推荐 4.2 LTS 或更新） |
 | `preview/xiaoying_hero.png` | Cycles 预览 |
-| `../../../../scripts/build_xiaoying.py` | 可重复生成的建模脚本 |
+| `../../scripts/build_xiaoying.py` | 可重复生成的建模脚本 |
 
 ## 打开后怎么看
 

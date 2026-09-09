@@ -16,7 +16,7 @@ import xiaoying_utils as U
 from xiaoying_utils import make_bsdf, link_object
 import xiaoying_feathers as F
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else "小鹰3D模型/小鹰_3D.blend"
+OUT = sys.argv[1] if len(sys.argv) > 1 else "小鹰3D模型/展翅写实版_小鹰/小鹰_3D.blend"
 
 U.fresh_scene()
 rootcol = U.new_collection("小鹰")

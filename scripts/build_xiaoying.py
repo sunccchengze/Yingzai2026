@@ -22,7 +22,7 @@ from mathutils import Euler, Matrix, Vector, noise
 # Paths / scene constants
 # ---------------------------------------------------------------------------
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-OUT_DIR = os.path.join(ROOT, "public", "models", "小鹰")
+OUT_DIR = os.path.join(ROOT, "小鹰3D模型", "高精绒羽版_小鹰")
 BLEND_PATH = os.path.join(OUT_DIR, "小鹰.blend")
 PREVIEW_DIR = os.path.join(OUT_DIR, "preview")
 REF_DIR = os.path.join(ROOT, "public", "images", "小鹰")
