@@ -121,7 +121,12 @@ class Refs:
         s_ = self.side
         _, _, stop, sbot = s_.bbox(s_.sil)
         self.s_top, self.s_bot = stop, sbot
-        cols = np.flatnonzero(s_.brown[380:440].any(0))
+        # 坑（第6轮校准）：cy_side 原用 brown 掩膜在 y380..440 取中心，
+        # 但侧视图这一段**前胸是白羽**（头部白羽垂下盖住胸口），brown 的左边界
+        # 因此偏右，整个 Y 基准被系统性后移 —— 实测 Δ左端 98% 为正、均值 +25.6px，
+        # 纯平移 -13px 即可把 side IoU 从 0.8595 提到 0.8919。
+        # 改用剪影(sil)取躯干中心；并排除尾羽段(y>430)避免把尾巴算进来。
+        cols = np.flatnonzero(s_.sil[380:430].any(0))
         self.cy_side = (cols.min() + cols.max()) / 2.0
 
         b_ = self.back
