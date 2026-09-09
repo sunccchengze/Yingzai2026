@@ -262,11 +262,24 @@ def build_body(r: Refs, m_brown, coll):
             continue
         rows.append(g['z']); ax.append(g['ax']); ay.append(g['ay'])
         cx.append(g['cx']); cy.append(g['cy'])
-    rings = list(zip(rows, smooth(ax, 9), smooth(ay, 11),
+    # 坑（第3/4轮校准）：ax 原先用 smooth(...,9)，步长 4px → 窗口跨 36 行。
+    # 参考图正面 y505..530 身体在 25 行内收窄 89px（屁股收口），
+    # 36 行的窗口正好把这个急转弯抹平，导致该段持续 +82px 过肥，
+    # 且改 taper_ends 完全无效（那只影响端点补圈）。
+    # 解法：对半宽用**自适应平滑** —— 逐点比较宽窗与窄窗，
+    # 局部曲率大（|宽窗-窄窗| 显著）的地方采用窄窗保住转折，平缓段仍用宽窗去锯齿。
+    ax_w, ax_n = smooth(ax, 9), smooth(ax, 3)
+    ax_adapt = []
+    tol = r.L(6)          # 6px 以内的差异视为噪声，仍走宽窗
+    for vw, vn in zip(ax_w, ax_n):
+        ax_adapt.append(vn if abs(vw - vn) > tol else vw)
+    rings = list(zip(rows, ax_adapt, smooth(ay, 11),
                      smooth(cx, 9), smooth(cy, 11)))
     rings.reverse()
     # 底部：0.55 会压出平底盘，0.30 又收太尖导致身体吊在脚上方露缝。
     # 0.46 兼顾「圆润」与「盖住脚背」。
+    # 注：bot_frac 是「额外补一圈的缩放系数」，不是收敛速度；调它治不了腰身。
+    # y505..530 的急收靠下面的自适应平滑保住（见 smooth 段注释）。
     rings = taper_ends(rings, top_frac=0.62, bot_frac=0.62)
     ob = new_obj("身体", loft(rings, segments=64), m_brown, coll)
     add_subsurf(ob, 2, 3)
@@ -279,8 +292,12 @@ def build_wings(r: Refs, m_wing, coll):
     参考图里翅膀是贴身收拢的（不是展翅），所以用扁平的水滴片贴在体侧。
     """
     objs = []
+    # 坑（第5轮校准）：翅膀下缘原锚在 y520，但参考图 y505..530 身体已急剧收窄
+    # (348→259px)，翅膀仍按体侧最宽处贴着 → 正面 y517 支棱出 +82px，
+    # 且该偏差不随 body 采样/平滑/taper 改变而变（因为它根本不是身体造成的）。
+    # 侧面图实测翅膀棕色区到 y500 之后明显内收，故下缘锚点上提到 500。
     top = r.ring(360, "brown", "brown", side_hi=337)
-    bot = r.ring(520, "brown", "brown", side_hi=349)
+    bot = r.ring(500, "brown", "brown", side_hi=349)
     zc = (top['z'] + bot['z']) / 2.0
     h = (top['z'] - bot['z']) / 2.0 * 1.02
     # 坑：Y 半径原为 115px，翅膀前后比躯干还长，侧视变成一道横扫的深色
@@ -516,9 +533,14 @@ def build_feet(r: Refs, m_foot, coll):
         cx = r.X((x0 + x1) / 2.0)
         w = r.L(x1 - x0)
         # 三根趾：外/中/内，横向错开 + 前后错开（中趾最长最靠前）
-        for k, (xo, yo, lf) in enumerate(((-0.30, +0.14, 0.90),
+        # 坑（第3轮校准）：xo=±0.30 时三趾挤在脚宽中段，正面 y555..560
+        # 渲染宽仅 164px 而参考是 273px（Δ=-109）。趾半径 toe_r 只占脚宽约
+        # 1/3，要铺满 x0..x1 必须让趾心分布到 ±0.34*w 之外——这里按
+        # 「趾心间距 = (脚宽 - 单趾直径) / 2」精确排布，使外侧趾缘正好落在 x0/x1。
+        xo_out = max(0.0, 0.5 - toe_r / max(w, 1e-6))
+        for k, (xo, yo, lf) in enumerate(((-xo_out, +0.14, 0.90),
                                           (0.00, -0.08, 1.00),
-                                          (+0.30, +0.14, 0.90))):
+                                          (+xo_out, +0.14, 0.90))):
             L = toe_len * lf
             bm = bmesh.new()
             n = 18

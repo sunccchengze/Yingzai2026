@@ -90,11 +90,21 @@ def main(preview_dir, report=True):
             # 逐行宽度差异，指出哪一段太胖/太瘦
             rows = np.linspace(0, ref.shape[0] - 1, 21).astype(int)
             diffs = []
+            # 参考图首末行常是抗锯齿残留(如背面 y613 剪影仅 7px 宽)，
+            # 拿它做基准会报出 +230px 的假警报，误导迭代方向 —— 剔除。
+            ys_ref = np.flatnonzero(ref.any(axis=1))
+            edge_lo, edge_hi = ys_ref.min(), ys_ref.max()
+            span = edge_hi - edge_lo
             for row in rows:
                 rr = np.flatnonzero(ref[row])
                 gg = np.flatnonzero(aligned[row])
-                if len(rr) and len(gg):
-                    diffs.append((row, (gg.max() - gg.min()) - (rr.max() - rr.min())))
+                if not (len(rr) and len(gg)):
+                    continue
+                # 上下各 1.5% 高度内、且参考宽度不足全宽 15% 的行视为噪声
+                near_edge = (row - edge_lo < span * 0.015) or (edge_hi - row < span * 0.015)
+                if near_edge and (rr.max() - rr.min()) < ref.shape[1] * 0.15:
+                    continue
+                diffs.append((row, (gg.max() - gg.min()) - (rr.max() - rr.min())))
             worst = sorted(diffs, key=lambda t: -abs(t[1]))[:5]
             print(f"  {name}: IoU {s:.4f}   宽度偏差最大行 " +
                   ", ".join(f"y{y}:{d:+d}px" for y, d in worst))
