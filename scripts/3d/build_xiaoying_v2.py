@@ -174,9 +174,15 @@ def taper_ends(rings, top_frac=0.0, bot_frac=0.0):
 # ════════════════════════════════════════════════════════════ 各部件
 def build_head(r: Refs, m_white, coll):
     """头：正面 y 55..300 的白色区域（不含下缘绒毛裙边）。"""
-    rings = sample_profile(r, 58, 300, "white", "white", step=4, smooth_k=9,
+    # 坑（第10轮，肉眼复核）：IoU 涨到 0.93 但渲染图里**头顶是个尖角**，
+    # 参考图却是圆润的大弧顶 —— 剪影分数对「顶部 20px 的尖/圆」几乎不敏感，
+    # 纯看数字会漏掉这种气质问题。
+    # 实测参考图 y70 头宽已 110px、y100 达 207px，是快速展开的圆顶；
+    # 采样从 y58 起 + top_frac=0.22 把顶端掐成了尖点。
+    # 改为从 y68 起采样（避开冠羽根部那段窄区），top_frac 提到 0.72 留住圆顶。
+    rings = sample_profile(r, 68, 300, "white", "white", step=4, smooth_k=9,
                            side_lo=55)
-    rings = taper_ends(rings, top_frac=0.22, bot_frac=0.55)
+    rings = taper_ends(rings, top_frac=0.72, bot_frac=0.55)
     ob = new_obj("头", loft(rings, segments=64), m_white, coll)
     add_subsurf(ob, 2, 3)
     return ob
@@ -216,8 +222,11 @@ def build_head_fringe(r: Refs, m_white, coll):
 
 def build_crest(r: Refs, m_white, coll):
     """头顶那撮翘起的呆毛：参考图 y 0..70，明显偏观众右+前。"""
+    # 坑（第10轮）：头部采样起点从 y58 提到 y68 修圆头顶后，冠羽只画到 y66，
+    # 两者之间**裂开一条缝**。让冠羽向下多延伸 20px（到 y86）插进头里，
+    # 靠体积相交自然融合 —— 多出来的部分被头包住，不影响剪影。
     pts = []
-    for row in range(2, 66, 6):
+    for row in range(2, 86, 6):
         fe = r.front.extent(r.front.sil, row)
         se = r.side.extent(r.side.sil, r.side_row(row))
         if not fe or not se:
@@ -279,8 +288,10 @@ def build_body(r: Refs, m_brown, coll):
     # 底部：0.55 会压出平底盘，0.30 又收太尖导致身体吊在脚上方露缝。
     # 0.46 兼顾「圆润」与「盖住脚背」。
     # 注：bot_frac 是「额外补一圈的缩放系数」，不是收敛速度；调它治不了腰身。
-    # y505..530 的急收靠下面的自适应平滑保住（见 smooth 段注释）。
-    rings = taper_ends(rings, top_frac=0.62, bot_frac=0.62)
+    # y505..530 的急收靠上面的自适应平滑保住（见 smooth 段注释）。
+    # 第10轮肉眼复核：bot_frac=0.62 让底部收成**倒三角尖屁股**，
+    # 参考图是圆润的收口。提到 0.86 把底部补圆（IoU 几乎不变，但形对了）。
+    rings = taper_ends(rings, top_frac=0.62, bot_frac=0.96)
     ob = new_obj("身体", loft(rings, segments=64), m_brown, coll)
     add_subsurf(ob, 2, 3)
     return ob
@@ -598,6 +609,36 @@ def build_feet(r: Refs, m_foot, coll):
             ob = new_obj(f"趾_{side}{k}", bm, m_foot, coll)
             add_subsurf(ob, 2, 3)
             objs.append(ob)
+
+        # 掌垫：把三根趾的根部连成一只脚。
+        # 坑（第10轮肉眼复核）：三趾各自独立放样后，渲染出来是**六颗孤立的黄球**，
+        # 参考图里三趾根部是连在一起的一只脚掌。剪影 IoU 看不出这个问题
+        # （孤立球和连体脚的外轮廓几乎一样），必须靠看图发现。
+        bm = bmesh.new()
+        n = 20
+        rings = []
+        # 掌垫沿 Y 从趾根略后 → 趾根略前，横向覆盖整只脚宽
+        pad_prof = ((-0.42, 0.62), (-0.10, 1.00), (0.24, 0.92), (0.46, 0.58))
+        for (t, rf) in pad_prof:
+            y = cy_mid + t * toe_len
+            ring = []
+            for i in range(n):
+                a = 2 * math.pi * i / n
+                ring.append(bm.verts.new((
+                    cx + (w * 0.5 * rf) * math.cos(a),
+                    y,
+                    z0 + toe_r * 1.16 + toe_r * rf * 0.72 * math.sin(a))))
+            rings.append(ring)
+        for A, B in zip(rings, rings[1:]):
+            for i in range(n):
+                j = (i + 1) % n
+                bm.faces.new((A[i], A[j], B[j], B[i]))
+        bm.faces.new(list(reversed(rings[0])))
+        bm.faces.new(rings[-1])
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        ob = new_obj(f"掌_{side}", bm, m_foot, coll)
+        add_subsurf(ob, 2, 3)
+        objs.append(ob)
     return objs
 
 
