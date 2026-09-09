@@ -149,3 +149,7 @@ docs/宣传部/*留部材料*.docx
 
 # Claude Code 本地状态与 worktree 目录（不应入 git）
 .claude/
+
+# Python bytecode
+__pycache__/
+*.pyc
