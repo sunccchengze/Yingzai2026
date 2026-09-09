@@ -158,3 +158,9 @@ docs/宣传部/*留部材料*.docx
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Office 临时锁文件（Excel/Word 打开时生成，勿入库）
+~$*
+
+# 无头 bpy 桩库（由 scripts/3d/blenv.sh 自动生成）
+.blstub/
