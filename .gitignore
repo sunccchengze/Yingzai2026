@@ -137,6 +137,11 @@ dist
 !.yarn/sdks
 !.yarn/versions
 
+# Blender Python module venv (local build only)
+.venv-blender/
+*.blend1
+scripts/__pycache__/
+
 # Vite files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
