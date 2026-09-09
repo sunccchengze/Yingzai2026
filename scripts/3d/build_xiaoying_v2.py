@@ -250,10 +250,14 @@ def build_body(r: Refs, m_brown, coll):
         t = (row_side - 436) / (538 - 436)
         return 337 + (349 - 337) * (1.0 - abs(2 * t - 1)) ** 0.6
 
+    # 坑（第 2 轮校准发现）：侧面深度原先用 brown 掩膜取，但参考图侧视里
+    # **胸前那块是白色**（头部白羽垂下盖住前胸），brown 掩膜把它整片漏掉，
+    # 于是躯干在 Y 向系统性后缩 —— 逐行对比显示 Δ左 全线 +15~+86px，
+    # 侧面 IoU 卡在 0.83。深度应当取**剪影**(sil)，颜色分界交给材质/描边。
     rows, ax, ay, cx, cy = [], [], [], [], []
     for row in range(330, 579, 4):
         rs = r.side_row(row)
-        g = r.ring(row, "brown", "brown", side_hi=tail_cut(rs))
+        g = r.ring(row, "brown", "sil", side_hi=tail_cut(rs))
         if g is None:
             continue
         rows.append(g['z']); ax.append(g['ax']); ay.append(g['ay'])
@@ -333,7 +337,10 @@ def build_beak(r: Refs, m_beak, m_beak_d, m_mouth, m_tongue, coll):
     # **喙尖落在正面菱形(y214..272)的内部**，不会往下盖住嘴。
     # 因此放样方式是「从脸部的完整菱形，向前收敛到喙尖那一小点」，
     # 而不是整片菱形平移下沉（那会把下面的碗全遮住）。
-    tip_pt = (0.0, r.Z(246))          # 喙尖在正面投影里的位置
+    # 实测(侧面图)：剪影左端 x=0 出现在 y≈258–262，喙黄最左 x=6 也在 y260，
+    # 即**喙尖比原先假设的 y246 更低**。喙尖抬太高会让 y209/y269 两行同时缺肉
+    # （首轮校准 Δw≈-57）。这里对齐实测值。
+    tip_pt = (0.0, r.Z(257))          # 喙尖在正面投影里的位置
     tip_half = (r.L(7), r.L(20))      # 喙尖处的小截面半宽/半高
     n_len = 10
     rings = []
@@ -555,8 +562,11 @@ def build_tail(r: Refs, m_wing, coll):
     """
     objs = []
     # 尾根贴在躯干后缘，尾尖伸到侧视 x≈394 且上翘
+    # 坑：尾尖原设 x=398 超出了参考剪影最远处(x=395)，再叠加 subsurf 外扩，
+    # 侧面宽高比被撑大 +7%，归一化后整圈缺肉(首轮 side IoU 仅 0.839)。
+    # 参考剪影 x=395 已含黑描边，实体应更收一点。
     y_root = r.Y(330)
-    y_tip = r.Y(398)
+    y_tip = r.Y(388)
     z_root = r.Z(r.f_top + (505 - r.s_top) / (r.s_bot - r.s_top) * r.px_h)
     z_tip = r.Z(r.f_top + (446 - r.s_top) / (r.s_bot - r.s_top) * r.px_h)
 
