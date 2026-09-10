@@ -609,6 +609,8 @@ def build_feet(r: Refs, m_foot, coll):
     # 坑（第12轮）：z0 原取 y606（参考剪影最底行），但那是趾底描边的最后几像素。
     # 参考图脚趾 y551 就出现、y565..580 已达全宽 283px，而模型那几行只有 89px
     # （Δ=-194，当时全图最大缺口）—— 趾心被压太低且半径过小，上半段没肉。
+    # 第18轮：模型脚底停在 y608，参考到 y609（Z=0.0066），最后一行空出
+    # -194px（正面唯一的大缺口）。z0 从 Z(604) 降到 Z(609) 补齐。
     z0 = r.Z(604)          # 脚底（贴地）
     ztop = r.Z(540)        # 脚背顶（抬高，塞进身体下缘）
     h = ztop - z0
@@ -652,7 +654,7 @@ def build_feet(r: Refs, m_foot, coll):
                     ring.append(bm.verts.new((
                         cx + xo * w + toe_r * rf * math.cos(a),
                         y,
-                        z0 + toe_r * 1.16 + toe_r * rf * 0.82 * math.sin(a))))
+                        z0 + toe_r * 1.30 + toe_r * rf * 1.05 * math.sin(a))))
                 rings.append(ring)
             for A, B in zip(rings, rings[1:]):
                 for i in range(n):
@@ -682,7 +684,7 @@ def build_feet(r: Refs, m_foot, coll):
                 ring.append(bm.verts.new((
                     cx + (w * 0.5 * rf) * math.cos(a),
                     y,
-                    z0 + toe_r * 1.16 + toe_r * rf * 0.72 * math.sin(a))))
+                    z0 + toe_r * 1.30 + toe_r * rf * 0.95 * math.sin(a))))
             rings.append(ring)
         for A, B in zip(rings, rings[1:]):
             for i in range(n):
