@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# 无头 bpy 的 python 启动器：保证 LD_LIBRARY_PATH 在解释器启动前就位。
+#
+# 坑：`source blenv.sh && python3 x.py` 在**同一条 bash 命令**里有时失效 ——
+# 若 shell 已在该行开头完成动态链接器初始化，后设的 LD_LIBRARY_PATH 不生效，
+# 仍报 libXrender.so.1 missing。用独立 wrapper 通过 exec 重新起进程即可根治。
+#
+# 用法: scripts/3d/blpy scripts/3d/build_xiaoying_v2.py --out /tmp/x.blend
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$here/blenv.sh" >/dev/null 2>&1
+export LD_LIBRARY_PATH="${BLSTUB_DIR:-$HOME/.blstub}:$LD_LIBRARY_PATH"
+exec python3 "$@"
