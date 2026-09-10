@@ -658,7 +658,7 @@ def build_feet(r: Refs, m_foot, coll):
                     ring.append(bm.verts.new((
                         cx + xo * w + toe_r * rf * math.cos(a),
                         y,
-                        z0 + toe_r * 1.30 + toe_r * rf * 1.05 * math.sin(a))))
+                        z0 + toe_r * 1.05 + toe_r * rf * 1.05 * math.sin(a))))
                 rings.append(ring)
             for A, B in zip(rings, rings[1:]):
                 for i in range(n):
@@ -688,7 +688,7 @@ def build_feet(r: Refs, m_foot, coll):
                 ring.append(bm.verts.new((
                     cx + (w * 0.5 * rf) * math.cos(a),
                     y,
-                    z0 + toe_r * 1.30 + toe_r * rf * 0.95 * math.sin(a))))
+                    z0 + toe_r * 1.05 + toe_r * rf * 0.95 * math.sin(a))))
             rings.append(ring)
         for A, B in zip(rings, rings[1:]):
             for i in range(n):
