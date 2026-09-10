@@ -192,7 +192,7 @@ def build_head(r: Refs, m_white, coll):
     # 第16轮分区统计「参考宽/模型宽」中位比值：
     #   头  正面 1.0228 / 侧面 1.0221 / 背面 1.0498  → 仍偏窄，X 更缺（背面看的也是 X）
     # X 取正/背折中偏大(1.033)，Y 取 1.022。
-    rings = [(z, (ax + pad) * 1.033, (ay + pad) * 1.022, cx, cy)
+    rings = [(z, (ax + pad) * 1.028, (ay + pad) * 1.032, cx, cy)
              for (z, ax, ay, cx, cy) in rings]
     rings = taper_ends(rings, top_frac=0.86, bot_frac=0.55)
     ob = new_obj("头", loft(rings, segments=64), m_white, coll)
@@ -312,7 +312,7 @@ def build_body(r: Refs, m_brown, coll):
     # 因此 Y 向改用较小的补偿(1.2px)再乘 0.968 的整体收缩。
     pad_y = r.L(1.2)
     rings = list(zip(rows, [v + pad for v in ax_adapt],
-                     [(v + pad_y) * 0.968 for v in ay_fix],
+                     [(v + pad_y) * 0.985 for v in ay_fix],
                      smooth(cx, 9), smooth(cy, 11)))
     rings.reverse()
     # 底部：0.55 会压出平底盘，0.30 又收太尖导致身体吊在脚上方露缝。
@@ -614,7 +614,7 @@ def build_feet(r: Refs, m_foot, coll):
     h = ztop - z0
     toe_len = r.L(100)     # 单根趾长度（三趾错开后凑成 157px 的侧视包络）
     # 第16轮：脚区中位比值 正面1.038/侧面1.078/背面1.056 → 仍偏小，半径×1.055
-    toe_r = r.L(25.3)      # 单根趾半径（加粗以填满 y555..580）
+    toe_r = r.L(26.6)      # 单根趾半径（第17轮：脚区仍偏小 3.4~7.1%）
     # 侧视包络中心：趾整体略微偏前（负 Y = 朝喙的方向）
     cy_mid = r.Y((98 + 255) / 2.0) - r.L(2)
 
