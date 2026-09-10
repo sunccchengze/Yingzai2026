@@ -292,8 +292,23 @@ def build_body(r: Refs, m_brown, coll):
         ax_adapt.append(vn if abs(vw - vn) > tol else vw)
     # 同头部：brown 掩膜不含黑描边，逐行半宽比剪影窄，统一补偿 +3.2px。
     pad = r.L(3.2)
+    # 坑（第15轮）：把 blend 求值后按高度带筛顶点，定位到**身体**（不是脚/尾）
+    # 在侧面 y563..575 那段 Ymax 超出参考 17px（Δ右 +22）。
+    # 身体最底部几圈的 Y 向半深要额外收，否则屁股在侧视里拖出一块。
+    ay_s = list(smooth(ay, 11))
+    n_ay = len(ay_s)
+    ay_fix = []
+    for i, v in enumerate(ay_s):
+        # rows 是从上往下采样后 reverse 前的顺序：i 越大越靠下
+        f = i / max(1, n_ay - 1)
+        shrink = 1.0 - 0.14 * max(0.0, (f - 0.78) / 0.22) ** 1.2
+        ay_fix.append(v * shrink)
+    # 坑（第16轮）：描边补偿 +3.2px 对正面(X)是必要的，但对侧面(Y)过量 ——
+    # 逐行实测「参考宽/模型宽」中位数只有 0.967，即 Y 向整体胖 3.3%。
+    # 因此 Y 向改用较小的补偿(1.2px)再乘 0.968 的整体收缩。
+    pad_y = r.L(1.2)
     rings = list(zip(rows, [v + pad for v in ax_adapt],
-                     [v + pad for v in smooth(ay, 11)],
+                     [(v + pad_y) * 0.968 for v in ay_fix],
                      smooth(cx, 9), smooth(cy, 11)))
     rings.reverse()
     # 底部：0.55 会压出平底盘，0.30 又收太尖导致身体吊在脚上方露缝。
@@ -593,10 +608,10 @@ def build_feet(r: Refs, m_foot, coll):
     z0 = r.Z(604)          # 脚底（贴地）
     ztop = r.Z(540)        # 脚背顶（抬高，塞进身体下缘）
     h = ztop - z0
-    toe_len = r.L(112)     # 单根趾长度（侧视单趾实测 ~112px）
+    toe_len = r.L(100)     # 单根趾长度（三趾错开后凑成 157px 的侧视包络）
     toe_r = r.L(24.0)      # 单根趾半径（加粗以填满 y555..580）
     # 侧视包络中心：趾整体略微偏前（负 Y = 朝喙的方向）
-    cy_mid = r.Y((99 + 255) / 2.0) - r.L(6)
+    cy_mid = r.Y((98 + 255) / 2.0) - r.L(2)
 
     # 实测正面 y580 行黄色分段：左脚 67-86 / 91-128 / 132-182，
     # 右脚 228-278 / 282-319 / 324-343 —— 即每只脚三根趾，
