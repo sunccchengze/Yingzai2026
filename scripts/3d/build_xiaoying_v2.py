@@ -180,9 +180,17 @@ def build_head(r: Refs, m_white, coll):
     # 实测参考图 y70 头宽已 110px、y100 达 207px，是快速展开的圆顶；
     # 采样从 y58 起 + top_frac=0.22 把顶端掐成了尖点。
     # 改为从 y68 起采样（避开冠羽根部那段窄区），top_frac 提到 0.72 留住圆顶。
-    rings = sample_profile(r, 68, 300, "white", "white", step=4, smooth_k=9,
+    # 坑（第14轮）：三视图在 y85 同时缺 23~30px、且全高持续缺 6~20px ——
+    # 头是系统性偏窄。原因有二：
+    #   ① 采样从 y68 起 + top_frac=0.72 补的那一圈仍不够宽，头顶被削；
+    #   ② white 掩膜不含黑色描边，逐行半宽天生比剪影窄 ~6px（每侧 3px）。
+    # 对策：采样上移到 y62 让顶部由实测数据接管，top_frac 提到 0.86，
+    # 并对整条剖面施加 +3.2px 的描边补偿（bloat）。
+    rings = sample_profile(r, 62, 300, "white", "white", step=4, smooth_k=9,
                            side_lo=55)
-    rings = taper_ends(rings, top_frac=0.72, bot_frac=0.55)
+    pad = r.L(3.2)
+    rings = [(z, ax + pad, ay + pad, cx, cy) for (z, ax, ay, cx, cy) in rings]
+    rings = taper_ends(rings, top_frac=0.86, bot_frac=0.55)
     ob = new_obj("头", loft(rings, segments=64), m_white, coll)
     add_subsurf(ob, 2, 3)
     return ob
@@ -282,7 +290,10 @@ def build_body(r: Refs, m_brown, coll):
     tol = r.L(6)          # 6px 以内的差异视为噪声，仍走宽窗
     for vw, vn in zip(ax_w, ax_n):
         ax_adapt.append(vn if abs(vw - vn) > tol else vw)
-    rings = list(zip(rows, ax_adapt, smooth(ay, 11),
+    # 同头部：brown 掩膜不含黑描边，逐行半宽比剪影窄，统一补偿 +3.2px。
+    pad = r.L(3.2)
+    rings = list(zip(rows, [v + pad for v in ax_adapt],
+                     [v + pad for v in smooth(ay, 11)],
                      smooth(cx, 9), smooth(cy, 11)))
     rings.reverse()
     # 底部：0.55 会压出平底盘，0.30 又收太尖导致身体吊在脚上方露缝。
@@ -390,9 +401,16 @@ def build_beak(r: Refs, m_beak, m_beak_d, m_mouth, m_tongue, coll):
         (44, 199, 253),
         (32, 213, 258),
         (20, 220, 263),
-        (12, 231, 267),
-        (6, 249, 271),
+        (12, 236, 274),
+        (6, 244, 277),
+        (1, 250, 277),   # 补一段更靠前的小截面，抵消 subsurf 对末端的收缩
     ]
+    # 坑（第13轮，实测 evaluated mesh 后定位）：把 blend 里的上喙连同 subsurf
+    # 一起求值，量到它最低只到 Z=1.150，而参考图 y269 的剪影需要 Z=1.117
+    # ——**差 10px**，正是侧面 y260..269 那 10 行 -103px 断崖的成因。
+    # 之前只下探 y_dn 无效：zc 取上下缘中点、half_z 取半差，
+    # 单独压低下缘会同时把中点抬起来，末端反而更短。
+    # 正确做法是上下缘**一起下移**（如 (6,249,263) -> (6,244,277)）。
     # 坑（第12轮）：喙尖原下缘取黄色像素的实际下界(263)，但参考图 y264..269
     # 剪影左端仍在 x=1..4 —— 那几行是喙的**黑色描边**，yellow 掩膜量不到。
     # 只按黄色建模会让喙在 y257 处戛然而止，侧面出现连续 4 行 -103px 的断崖。
@@ -406,8 +424,12 @@ def build_beak(r: Refs, m_beak, m_beak_d, m_mouth, m_tongue, coll):
         z_up, z_dn = r.Z(y_up), r.Z(y_dn)
         zc = (z_up + z_dn) / 2.0
         half_z = (z_up - z_dn) / 2.0
-        # 横向收窄：根部保持菱形满宽，越靠喙尖越窄（尖端约 12%）
-        wf = (1.0 - t) ** 0.85 * 0.88 + 0.12
+        # 横向收窄：根部保持菱形满宽，越靠喙尖越窄。
+        # 坑（第13轮）：尖端原留 12%，配合 subsurf(levels=2/render=3) 会被
+        # **抹圆收缩**——渲染出的喙在 y259 处直接断掉，比设计短了整整 10 行
+        # （侧面 y260..269 连续 -103px，占 side IoU 缺口的绝大部分）。
+        # Catmull-Clark 对细长尖端收缩明显，尖端保留 26% 才能撑住剪影。
+        wf = (1.0 - t) ** 0.85 * 0.74 + 0.26
         ring = []
         for (px, pz) in face_pts:
             # px 保持正面菱形的左右形状，按 wf 收窄
@@ -417,6 +439,12 @@ def build_beak(r: Refs, m_beak, m_beak_d, m_mouth, m_tongue, coll):
             span = max(1e-6, z_top - z_bot)
             u = (pz - z_bot) / span            # 0..1 在原菱形里的相对高度
             nz = zc + (u - 0.5) * 2.0 * half_z
+            # 鹰钩下垂：越靠喙尖整圈越往下压。
+            # 坑（第13轮）：只改 beak_profile 的 y_dn 不够 —— face_pts 的 u 分布
+            # 集中在中部，末端几圈的顶点仍挤在 zc 附近，求值后 Zmin 只到 1.143，
+            # 而参考图 y269 需要 1.117。这里对末端额外施加一个下垂偏置，
+            # 让喙尖真正勾到位（t=1 时下压 ~24px）。
+            nz -= r.L(14.0) * (t ** 1.6)
             ring.append(bm.verts.new((nx, y, nz)))
         rings.append(ring)
     m = len(face_pts)
