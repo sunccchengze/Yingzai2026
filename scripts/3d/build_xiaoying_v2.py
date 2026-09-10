@@ -220,40 +220,80 @@ def build_head(r: Refs, m_white, coll):
 
 
 def build_head_fringe(r: Refs, m_white, coll):
-    """颈羽裙边：头部下缘那一圈波浪状白绒毛（正面 y 290..355）。
+    """颈羽披肩：头部下缘垂下来的一圈白绒毛，下缘是扇贝波浪。
 
-    参考图里这是「一圈扇贝状的白色羽尖盖在棕色身体上」，
-    所以用一圈**扁而尖**的水滴贴着头下缘排布，而不是一圈圆球（否则像牙齿）。
+    ── 第23轮重写（造型优先）──
+    原实现是 17 个独立小球排成一圈。两个毛病：
+      ① 大小几乎一致（半径差 ±10%），渲染像一圈**均匀的项链/牙齿**；
+      ② 想加大起伏做成扇贝，相邻球立刻互相穿插，Freestyle 把**内部交线**
+         也描了出来，背面一片黑色乱线（第22轮已验证，见 README 踩坑 15）。
+
+    参考三视图实测（白色下缘）：
+      正面 y285..366、侧面 y289..352、背面 y289..366，
+      **三视图一致垂到全高约 60%**，下缘在中段最深、往两侧收高，是波浪边。
+
+    改法：不再堆球，而是放样**单个连续网格**——
+    从头下缘那一圈（上环）垂下一圈裙摆（下环），下环的 z 用两个不同频率的
+    余弦叠加成扇贝波浪。单一闭合曲面 → 没有自交，Freestyle 只描外轮廓。
     """
-    g = r.ring(300, "white", "white", side_lo=55)
-    n = 17
-    objs = []
+    # 坑（第23轮首版）：直接用 r.ring(292) 当上环 —— 它给的是**参考图剖面**
+    # 尺寸 ax=146px，而模型头在 y292 的实际 X 半径是 **167px**（evaluated mesh 实测）。
+    # 披肩因此缩在头里面，渲染出来是一团棉花、且与头之间裂开一条明显的缝。
+    # 改为按头的实测半径建上环，并让它**向上插进头里 22px**，保证接缝被盖住。
+    g_top = r.ring(292, "white", "white", side_lo=55)   # 只取 cx/cy/z
+    g_bot = r.ring(330, "white", "white", side_lo=55)
+    # 坑（第23轮三版）：披肩两侧出现黑色乱线 —— Freestyle 开了 select_crease，
+    # 上环只插进头里 22px，披肩壁与头面在交界处形成一圈**陡折**，
+    # 折痕角超过阈值就被描了出来。
+    # 对策：上环缩到比头略小（藏进头内部而不是顶着头皮），并大幅加深插入量，
+    # 让交界发生在头的内部、外面看不到那圈折痕。
+    ax_top, ay_top = r.L(150.0), r.L(112.0)   # 比头 y292 半径(167/125)小，藏进去
+    # 坑（第23轮二版）：裙摆半径取 150px，可**身体在 y340 处已有 168px、
+    # y366 处 185px** —— 披肩比身体细，整个被身体吞掉，背面只在脖子处
+    # 露出一小截，看不出扇贝，也远达不到参考「垂到全高 60%」的披肩感。
+    # 参考里这圈白羽是**盖在身体外面**的，所以裙摆必须比同高度的身体更宽。
+    ax_bot, ay_bot = r.L(196.0), r.L(150.0)   # 盖住身体（y366 处身体半径 185px）
+    n = 72              # 圆周分段（够密才能让扇贝边平滑）
+    lobes = 9           # 扇贝瓣数
+
+    bm = bmesh.new()
+    top_ring, bot_ring = [], []
     for i in range(n):
         t = 2 * math.pi * i / n
-        # 半径取 0.84：**藏在头部剪影之内**，只在下方露出扇贝边，
-        # 否则会在头两侧支棱出去，看着像一圈牙齿。
-        # 坑：颈羽原本沿椭圆均匀铺（0.84 圈），最前那颗球表面伸到 y≈-0.50，
-        # 比头部前表面(-0.44)还靠前，把整张嘴挡在后面。
-        # 参考图里这圈扇贝其实是**从下巴兜到两颊**、并不越过脸的最前沿，
-        # 所以前后方向压到 0.66 并整体下沉。
-        px = g['cx'] + g['ax'] * 0.86 * math.cos(t)
-        py = g['cy'] + g['ay'] * 0.66 * math.sin(t)
-        bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=12, radius=1.0)
-        # 坑（第22轮）：想把这圈做成参考那种「大小交替的扇贝波浪」，
-        # 把半径幅度加到 ±26%、下垂加到 ±55% —— 结果相邻球互相穿插，
-        # Freestyle 把**内部交线**也描了出来，背面出现一片黑色乱线，
-        # 比原来的均匀圈更糟。要做扇贝必须换成单个连续网格（放样一圈波浪边），
-        # 而不是靠一堆独立球去凑。
-        rr = r.L(31) * (1.0 + 0.10 * math.sin(i * 2.3))
-        drop = r.L(16) * (1.0 + 0.18 * math.cos(i * 1.7))
-        # 扁圆扇贝：横向宽、纵向略长，不做成尖牙
-        bmesh.ops.scale(bm, vec=(rr, rr, rr * 0.95), verts=bm.verts)
-        bmesh.ops.translate(bm, vec=(px, py, g['z'] - drop), verts=bm.verts)
-        ob = new_obj(f"颈羽_{i:02d}", bm, m_white, coll)
-        add_subsurf(ob, 1, 2)
-        objs.append(ob)
-    return objs
+        ct, st = math.cos(t), math.sin(t)
+        # 上环：贴着头部下缘，略微内收藏进头里，避免出现接缝
+        top_ring.append(bm.verts.new((
+            g_top['cx'] + ax_top * ct,
+            g_top['cy'] + ay_top * st,
+            g_top['z'] + r.L(58))))
+        # 下环：向外张开一点（裙摆），并按扇贝波浪决定垂下深度
+        wave = 0.5 + 0.5 * math.cos(lobes * t)          # 0..1，瓣中心=1
+        wave2 = 0.5 + 0.5 * math.cos(2 * lobes * t + 1.1)
+        # 垂坠深度：参考三视图白色下缘一致到全高约 60%（背面行 y366），
+        # 上环在行 y292 附近，故基准下垂要到 ~74px，瓣中心再多垂一截。
+        drop = r.L(52) + r.L(30) * wave + r.L(8) * wave2
+        # 正面(st<0，朝 -Y)略浅一点，别把嘴埋掉；背面(st>0)最深
+        drop *= (1.0 + 0.16 * st)
+        bot_ring.append(bm.verts.new((
+            g_bot['cx'] + ax_bot * ct,
+            g_bot['cy'] + ay_bot * st,
+            g_top['z'] - drop)))
+    # 侧壁
+    for i in range(n):
+        k = (i + 1) % n
+        bm.faces.new((top_ring[i], top_ring[k], bot_ring[k], bot_ring[i]))
+    # 顶面封口（藏在头里，看不见但保证是闭合实体）
+    bm.faces.new(list(reversed(top_ring)))
+    # 底面封口：扇贝边有厚度感，收一圈到中心稍上方
+    cz = min(v.co.z for v in bot_ring) + r.L(10)
+    center = bm.verts.new((g_bot['cx'], g_bot['cy'], cz))
+    for i in range(n):
+        k = (i + 1) % n
+        bm.faces.new((bot_ring[i], bot_ring[k], center))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = new_obj("颈羽披肩", bm, m_white, coll)
+    add_subsurf(ob, 2, 3)
+    return [ob]
 
 
 def build_crest(r: Refs, m_white, coll):
