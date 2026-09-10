@@ -301,23 +301,60 @@ def build_head_fringe(r: Refs, m_white, coll):
 
 
 def build_crest(r: Refs, m_white, coll):
-    """头顶那撮翘起的呆毛：参考图 y 0..70，明显偏观众右+前。"""
-    # 坑（第10轮）：头部采样起点从 y58 提到 y68 修圆头顶后，冠羽只画到 y66，
-    # 两者之间**裂开一条缝**。让冠羽向下多延伸 20px（到 y86）插进头里，
-    # 靠体积相交自然融合 —— 多出来的部分被头包住，不影响剪影。
-    pts = []
-    for row in range(2, 86, 6):
-        fe = r.front.extent(r.front.sil, row)
-        se = r.side.extent(r.side.sil, r.side_row(row))
-        if not fe or not se:
-            continue
-        pts.append((r.Z(row),
-                    r.L((fe[1] - fe[0]) / 2.0), r.L((se[1] - se[0]) / 2.0),
-                    r.X((fe[0] + fe[1]) / 2.0), r.Y((se[0] + se[1]) / 2.0)))
-    pts.reverse()
-    rings = taper_ends(pts, top_frac=0.15)
-    ob = new_obj("冠羽", loft(rings, close_bottom=True, segments=32),
-                 m_white, coll)
+    """头顶那撮翘起的呆毛。
+
+    ── 第23轮重写（造型优先，第22轮三次尝试均失败后按 README 建议重做）──
+    原实现用剪影包围盒放样成回转体 + `taper_ends(top_frac=0.15)`，
+    渲染是个光滑「奶油尖」；第22轮改拼两片直锥，先后得到「太瘦」「猫耳朵」
+    「小驼峰」三种坏结果（见 README 踩坑 16）。
+    失败原因是**用直锥拼，且左右岔开**，而参考那撮是沿一条斜中轴的单撮羽。
+
+    参考实测（冠羽本体在 y8..44，y50 起已并入头部）：
+      侧面：中心 x 260→253→246→240→234→226→216（**向前倾 44px**），宽 27→67
+      正面：中心 x 241→236→232→228→222，宽 18→51
+    即一撮**向前上方斜翘、根粗尖细**的锥形羽。
+    这里沿这条实测中轴放样单片，横截面用椭圆（正面窄、侧面宽），
+    末端收细并带一点回勾，做出羽毛的飘逸感。
+    """
+    # (图像行, 侧视中心x, 正面中心x, 正面半宽, 侧面半宽)
+    # 坑（第23轮）：根部原设在行 y46，可**头顶最高只到 y60**（evaluated mesh 实测），
+    # 中间隔着 14px 空气 —— 冠羽整个飘在头顶上方，成了一片浮空的白叶子。
+    # 根部必须延伸到 y80 以下（头在 y80 处半径 88px）才能真正插进头里。
+    spine = (
+        (84, 206, 222, 40, 46),   # 根部：埋进头内部
+        (66, 210, 224, 33, 41),
+        (54, 214, 228, 28, 36),
+        (38, 226, 228, 25, 35),
+        (32, 234, 222, 24, 34),
+        (26, 240, 228, 22, 32),
+        (20, 246, 232, 19, 28),
+        (14, 253, 236, 14, 22),
+        (8, 260, 241, 9, 14),
+        (3, 266, 244, 4, 7),      # 羽尖
+    )
+    bm = bmesh.new()
+    n = 24
+    rings = []
+    for (row, sx, fx, hw_f, hw_s) in spine:
+        z = r.Z(row)
+        cy = r.Y(sx)
+        cx = r.X(fx)
+        ring = []
+        for i2 in range(n):
+            a = 2 * math.pi * i2 / n
+            ring.append(bm.verts.new((
+                cx + r.L(hw_f) * math.cos(a),
+                cy + r.L(hw_s) * math.sin(a),
+                z)))
+        rings.append(ring)
+    for A, B in zip(rings, rings[1:]):
+        for i2 in range(n):
+            j2 = (i2 + 1) % n
+            bm.faces.new((A[i2], A[j2], B[j2], B[i2]))
+    bm.faces.new(list(reversed(rings[0])))
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ob = new_obj("冠羽", bm, m_white, coll)
     add_subsurf(ob, 2, 3)
     return ob
 
