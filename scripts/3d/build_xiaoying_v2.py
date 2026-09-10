@@ -575,17 +575,25 @@ def build_eyes(r: Refs, m_dark, m_white, coll):
     objs = []
     head = r.ring(210, "white", "white", side_lo=55)
     cz = r.Z(212)
+    # 坑（第20轮，肉眼验收）：IoU 达标(0.9503)但渲染图里**眼睛缩成两粒小黑点**，
+    # 参考图是又大又圆的招牌大眼。眼在剪影内部，IoU 完全测不出这个气质硬伤。
+    # 用 dark 连通域量出参考眼实际是 68(宽)×87(高) 的**竖椭圆**，
+    # 而原实现取 y210 行宽度(53px)当直径、且内嵌 40%，加之头部前移 7px 后
+    # 更埋进去 —— 渲染可见部分只剩 ~20px。
+    # 改：按实测 68×87 建竖椭圆，内嵌降到 18%，让眼球饱满地凸在脸上。
+    eye_rx = r.L(68 / 2.0)
+    eye_rz = r.L(87 / 2.0)
     for (x0, x1, side) in ((109, 162, "左"), (255, 303, "右")):
         cx = r.X((x0 + x1) / 2.0)
-        rad = r.L((x1 - x0) / 2.0)
+        rad = eye_rx
         # 头部截面椭圆在该 x 处的前表面 y
         t = min(abs((cx - head['cx']) / head['ax']), 0.985)
         y_surf = head['cy'] - head['ay'] * math.sqrt(1.0 - t * t)
-        # 眼球中心略微内嵌 40% 半径，其余凸出于表面
-        cy = y_surf + rad * 0.40
+        # 眼球中心只内嵌 18% 半径，其余凸出于表面
+        cy = y_surf + rad * 0.18
         bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=22, radius=rad)
-        bmesh.ops.scale(bm, vec=(1.0, 0.95, 1.05), verts=bm.verts)
+        bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=22, radius=1.0)
+        bmesh.ops.scale(bm, vec=(eye_rx, eye_rx * 0.92, eye_rz), verts=bm.verts)
         bmesh.ops.translate(bm, vec=(cx, cy, cz), verts=bm.verts)
         objs.append(new_obj(f"眼_{side}", bm, m_dark, coll))
         # 两点高光（参考图是卡通高光）
